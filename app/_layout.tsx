@@ -5,39 +5,56 @@ import { useAppStore, loadPersistedState } from '../store/useAppStore';
 import { themes } from '../lib/themes';
 import { View, ActivityIndicator } from 'react-native';
 import { initializePurchases, syncPremiumStatus } from '../services/purchaseService';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 
 export default function RootLayout() {
   const [isReady, setIsReady] = useState(false);
   const theme = useAppStore((state) => state.user.theme);
-  const colors = themes[theme];
+  // Fallback to midnight theme if theme is invalid
+  const colors = themes[theme] || themes.midnight;
 
   useEffect(() => {
     const initializeApp = async () => {
       try {
         // Load persisted state FIRST (critical for app to work)
-        const state = await loadPersistedState();
-        if (state) {
-          useAppStore.setState(state);
+        try {
+          const state = await loadPersistedState();
+          if (state && typeof state === 'object') {
+            // Validate state before setting
+            useAppStore.setState(state);
+          }
+        } catch (stateError) {
+          console.error('[App] Failed to load state, using defaults:', stateError);
+          // Continue with default state
         }
 
-        // Initialize RevenueCat (non-critical, wrapped in try-catch)
-        try {
-          await initializePurchases();
-          
-          // Sync premium status with RevenueCat (optional)
-          const premiumStatus = await syncPremiumStatus();
-          if (premiumStatus !== null) {
-            useAppStore.getState().setPremium(premiumStatus);
+        // Set ready immediately after state loads
+        setIsReady(true);
+
+        // Initialize RevenueCat AFTER UI is ready (deferred, non-blocking)
+        // This prevents crashes from blocking the app startup
+        setTimeout(async () => {
+          try {
+            await initializePurchases();
+            
+            // Sync premium status with RevenueCat (optional)
+            try {
+              const premiumStatus = await syncPremiumStatus();
+              if (premiumStatus !== null) {
+                useAppStore.getState().setPremium(premiumStatus);
+              }
+            } catch (syncError) {
+              console.error('[App] Failed to sync premium status:', syncError);
+            }
+          } catch (rcError) {
+            console.error('[App] Failed to initialize purchases:', rcError);
+            // App continues with cached premium state - this is fine
           }
-        } catch (error) {
-          console.error('[App] Failed to initialize purchases:', error);
-          // App continues with cached premium state - this is fine
-        }
+        }, 1000); // Delay RevenueCat init by 1 second
+        
       } catch (error) {
         console.error('[App] Critical initialization error:', error);
-        // Even if state loading fails, continue with default state
-      } finally {
-        // ALWAYS set ready to true, even if errors occur
+        // Even if everything fails, show the app
         setIsReady(true);
       }
     };
@@ -78,7 +95,7 @@ export default function RootLayout() {
   }
 
   return (
-    <>
+    <ErrorBoundary>
       <StatusBar style="light" />
       <Stack
         screenOptions={{
@@ -86,6 +103,6 @@ export default function RootLayout() {
           contentStyle: { backgroundColor: colors.background },
         }}
       />
-    </>
+    </ErrorBoundary>
   );
 }

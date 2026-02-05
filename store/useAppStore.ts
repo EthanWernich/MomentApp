@@ -29,23 +29,52 @@ const persistState = async (state: Partial<AppState>) => {
 export const loadPersistedState = async (): Promise<Partial<AppState> | null> => {
   try {
     const jsonValue = await AsyncStorage.getItem(STORAGE_KEY);
-    if (jsonValue) {
-      const parsed = JSON.parse(jsonValue);
-      // Convert date strings back to Date objects
+    if (!jsonValue) {
+      return null;
+    }
+    
+    const parsed = JSON.parse(jsonValue);
+    
+    // Validate and sanitize the parsed data
+    if (parsed && typeof parsed === 'object') {
+      // Safely convert date strings back to Date objects
       if (parsed.user?.birthdate) {
-        parsed.user.birthdate = new Date(parsed.user.birthdate);
+        try {
+          const date = new Date(parsed.user.birthdate);
+          // Validate date is valid
+          if (!isNaN(date.getTime())) {
+            parsed.user.birthdate = date;
+          } else {
+            delete parsed.user.birthdate;
+          }
+        } catch {
+          delete parsed.user.birthdate;
+        }
       }
-      if (parsed.events) {
-        parsed.events = parsed.events.map((event: any) => ({
-          ...event,
-          eventDate: new Date(event.eventDate),
-          createdAt: new Date(event.createdAt),
-        }));
+      
+      // Safely convert event dates
+      if (parsed.events && Array.isArray(parsed.events)) {
+        parsed.events = parsed.events
+          .map((event: any) => {
+            try {
+              return {
+                ...event,
+                eventDate: new Date(event.eventDate),
+                createdAt: new Date(event.createdAt),
+              };
+            } catch {
+              return null;
+            }
+          })
+          .filter((event: any) => event !== null && !isNaN(event.eventDate?.getTime()));
+      } else {
+        parsed.events = [];
       }
+      
       return parsed;
     }
   } catch (e) {
-    console.error('Failed to load state', e);
+    console.error('[Store] Failed to load state:', e);
   }
   return null;
 };
