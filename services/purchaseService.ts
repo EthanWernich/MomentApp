@@ -18,6 +18,11 @@ const REVENUECAT_API_KEY = Platform.select({
   android: 'YOUR_ANDROID_API_KEY_HERE', // Add your Android key when ready
 }) || '';
 
+// Validate API key exists
+const hasValidApiKey = () => {
+  return REVENUECAT_API_KEY && REVENUECAT_API_KEY.length > 10 && !REVENUECAT_API_KEY.includes('YOUR_');
+};
+
 // Offering identifier for lifetime purchase
 const LIFETIME_OFFERING_ID = 'lifetime';
 
@@ -42,6 +47,13 @@ export const initializePurchases = async (): Promise<void> => {
   }
 
   try {
+    // Validate API key before attempting to initialize
+    if (!hasValidApiKey()) {
+      console.warn('[PurchaseService] Invalid or missing API key, skipping initialization');
+      state.isOffline = true;
+      return;
+    }
+
     // Configure RevenueCat
     if (__DEV__) {
       Purchases.setLogLevel(LOG_LEVEL.DEBUG);
@@ -53,10 +65,12 @@ export const initializePurchases = async (): Promise<void> => {
     state.isInitialized = true;
     state.isOffline = false;
     console.log('[PurchaseService] Initialized successfully');
-  } catch (error) {
-    console.error('[PurchaseService] Initialization failed:', error);
-    // Allow app to continue even if initialization fails
+  } catch (error: any) {
+    console.error('[PurchaseService] Initialization failed:', error?.message || error);
+    // CRITICAL: Allow app to continue even if initialization fails
+    // The app will work in offline mode with local premium state
     state.isOffline = true;
+    state.isInitialized = false;
   }
 };
 

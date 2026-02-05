@@ -13,32 +13,43 @@ export default function RootLayout() {
 
   useEffect(() => {
     const initializeApp = async () => {
-      // Load persisted state
-      const state = await loadPersistedState();
-      if (state) {
-        useAppStore.setState(state);
-      }
-
-      // Initialize RevenueCat
       try {
-        await initializePurchases();
-        
-        // Sync premium status with RevenueCat
-        const premiumStatus = await syncPremiumStatus();
-        if (premiumStatus !== null) {
-          useAppStore.getState().setPremium(premiumStatus);
+        // Load persisted state FIRST (critical for app to work)
+        const state = await loadPersistedState();
+        if (state) {
+          useAppStore.setState(state);
+        }
+
+        // Initialize RevenueCat (non-critical, wrapped in try-catch)
+        try {
+          await initializePurchases();
+          
+          // Sync premium status with RevenueCat (optional)
+          const premiumStatus = await syncPremiumStatus();
+          if (premiumStatus !== null) {
+            useAppStore.getState().setPremium(premiumStatus);
+          }
+        } catch (error) {
+          console.error('[App] Failed to initialize purchases:', error);
+          // App continues with cached premium state - this is fine
         }
       } catch (error) {
-        console.error('[App] Failed to initialize purchases:', error);
-        // Continue anyway - app will work offline with cached state
+        console.error('[App] Critical initialization error:', error);
+        // Even if state loading fails, continue with default state
+      } finally {
+        // ALWAYS set ready to true, even if errors occur
+        setIsReady(true);
       }
-
-      setIsReady(true);
     };
 
-    initializeApp();
+    initializeApp().catch((error) => {
+      // Ultimate safety net - catch any unhandled promise rejections
+      console.error('[App] Unhandled initialization error:', error);
+      setIsReady(true);
+    });
 
     // Sync premium status periodically (every 5 minutes)
+    // Only start interval sync if app is initialized successfully
     const syncInterval = setInterval(async () => {
       try {
         const premiumStatus = await syncPremiumStatus();
@@ -46,11 +57,16 @@ export default function RootLayout() {
           useAppStore.getState().setPremium(premiumStatus);
         }
       } catch (error) {
+        // Silently fail - don't crash the app during background sync
         console.error('[App] Failed to sync premium status:', error);
       }
     }, 5 * 60 * 1000);
 
-    return () => clearInterval(syncInterval);
+    return () => {
+      if (syncInterval) {
+        clearInterval(syncInterval);
+      }
+    };
   }, []);
 
   if (!isReady) {
