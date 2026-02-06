@@ -10,6 +10,16 @@ config.resolver.extraNodeModules = {
     'shims',
     'findNodeHandle.js'
   ),
+  'react-native/Libraries/Renderer/shims/ReactNative': path.join(
+    __dirname,
+    'shims',
+    'ReactNativeShim.js'
+  ),
+  'react-native/Libraries/Renderer/shims/ReactFabric': path.join(
+    __dirname,
+    'shims',
+    'ReactFabricShim.js'
+  ),
 };
 
 module.exports = config;
