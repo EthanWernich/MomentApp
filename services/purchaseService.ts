@@ -1,29 +1,22 @@
 /**
  * RevenueCat Purchase Service
- * Handles lifetime purchase for anonymous users
- * Graceful offline handling with local state sync
+ * Production-safe version
  */
 
-import type {
+import Purchases, {
+  LOG_LEVEL,
   PurchasesOffering,
   PurchasesPackage,
   CustomerInfo,
 } from 'react-native-purchases';
-import { NativeModules, Platform } from 'react-native';
 
-// RevenueCat API Keys
+import { Platform } from 'react-native';
+
+// 🔥 API Keys
 const REVENUECAT_API_KEY = Platform.select({
   ios: 'appl_tRqCeTnLhYPSYVkTsokafYskJwS',
-  android: 'YOUR_ANDROID_API_KEY_HERE', // Add your Android key when ready
-}) || '';
-
-// Validate API key exists
-const hasValidApiKey = () => {
-  return REVENUECAT_API_KEY && REVENUECAT_API_KEY.length > 10 && !REVENUECAT_API_KEY.includes('YOUR_');
-};
-
-// Offering identifier for lifetime purchase
-const LIFETIME_OFFERING_ID = 'lifetime';
+  android: '', // put your Android key later
+});
 
 interface PurchaseServiceState {
   isInitialized: boolean;
@@ -35,122 +28,58 @@ const state: PurchaseServiceState = {
   isOffline: false,
 };
 
-type PurchasesModuleType = typeof import('react-native-purchases');
-let cachedPurchasesModule: PurchasesModuleType | null | undefined;
-
-const getPurchasesModule = (): PurchasesModuleType | null => {
-  if (cachedPurchasesModule !== undefined) {
-    return cachedPurchasesModule;
-  }
-
-  try {
-    cachedPurchasesModule = require('react-native-purchases') as PurchasesModuleType;
-    return cachedPurchasesModule;
-  } catch (error) {
-    console.warn('[PurchaseService] Purchases module unavailable:', error);
-    cachedPurchasesModule = null;
-    return null;
-  }
-};
-
-const getPurchases = (): PurchasesModuleType['default'] | null => {
-  const module = getPurchasesModule();
-  return module?.default ?? null;
-};
-
-const getLogLevel = (): PurchasesModuleType['LOG_LEVEL'] | undefined => {
-  const module = getPurchasesModule();
-  return module?.LOG_LEVEL;
-};
-
-const hasPurchasesModule = (): boolean => {
-  const nativeModuleAvailable = Boolean(NativeModules?.RNPurchases || NativeModules?.Purchases);
-  return Boolean(nativeModuleAvailable && getPurchases());
-};
-
 /**
- * Initialize RevenueCat SDK
- * Call this once at app startup
+ * Initialize RevenueCat
+ *
+ * IMPORTANT:
+ * Call AFTER app UI renders.
+ * Do NOT block startup.
  */
 export const initializePurchases = async (): Promise<void> => {
-  if (state.isInitialized) {
-    console.log('[PurchaseService] Already initialized');
-    return;
-  }
+  if (state.isInitialized) return;
 
   try {
-    const purchases = getPurchases();
-    const logLevel = getLogLevel();
-
-    // Ensure native module is available before calling into it
-    if (!purchases || !hasPurchasesModule()) {
-      console.warn('[PurchaseService] Native module unavailable, skipping initialization');
-      state.isOffline = true;
-      state.isInitialized = false;
+    if (!REVENUECAT_API_KEY) {
+      console.warn('[PurchaseService] Missing RevenueCat API key');
       return;
     }
 
-    // Validate API key before attempting to initialize
-    if (!hasValidApiKey()) {
-      console.warn('[PurchaseService] Invalid or missing API key, skipping initialization');
-      state.isOffline = true;
-      return;
-    }
-
-    // Configure RevenueCat - set log level BEFORE configure
     if (__DEV__) {
-      if (logLevel?.DEBUG) {
-        purchases.setLogLevel(logLevel.DEBUG);
-      }
+      Purchases.setLogLevel(LOG_LEVEL.DEBUG);
     }
 
-    // Initialize with anonymous user - configure is SYNCHRONOUS, don't await
-    purchases.configure({ apiKey: REVENUECAT_API_KEY });
-    
+    await Purchases.configure({
+      apiKey: REVENUECAT_API_KEY,
+    });
+
     state.isInitialized = true;
     state.isOffline = false;
-    console.log('[PurchaseService] Initialized successfully');
-  } catch (error: any) {
-    console.error('[PurchaseService] Initialization failed:', error?.message || error);
-    // CRITICAL: Allow app to continue even if initialization fails
-    // The app will work in offline mode with local premium state
+
+    console.log('[PurchaseService] ✅ Initialized');
+  } catch (error) {
+    console.error('[PurchaseService] Initialization failed:', error);
     state.isOffline = true;
-    state.isInitialized = false;
   }
 };
 
 /**
- * Get available offerings from RevenueCat
- * Returns null if offline or error occurs
+ * Get Offerings
  */
 export const getOfferings = async (): Promise<PurchasesOffering | null> => {
   try {
     if (!state.isInitialized) {
-      console.warn('[PurchaseService] Not initialized, attempting to initialize...');
       await initializePurchases();
     }
 
-    if (!state.isInitialized) {
-      return null;
-    }
+    const offerings = await Purchases.getOfferings();
 
-    const purchases = getPurchases();
-    if (!purchases || !hasPurchasesModule()) {
-      return null;
-    }
-
-    const offerings = await purchases.getOfferings();
-    
-    // Get the lifetime offering
-    const lifetimeOffering = offerings.current;
-    
-    if (!lifetimeOffering) {
-      console.warn('[PurchaseService] No current offering found');
+    if (!offerings?.current) {
+      console.warn('[PurchaseService] No current offering');
       return null;
     }
 
     state.isOffline = false;
-    return lifetimeOffering;
+    return offerings.current;
   } catch (error) {
     console.error('[PurchaseService] Failed to get offerings:', error);
     state.isOffline = true;
@@ -159,88 +88,65 @@ export const getOfferings = async (): Promise<PurchasesOffering | null> => {
 };
 
 /**
- * Purchase the lifetime package
- * Returns CustomerInfo on success, null on failure
+ * Purchase Lifetime
  */
 export const purchaseLifetime = async (
-  packageToPurchase?: PurchasesPackage
+  pkg?: PurchasesPackage
 ): Promise<CustomerInfo | null> => {
   try {
     if (!state.isInitialized) {
-      console.warn('[PurchaseService] Not initialized, attempting to initialize...');
       await initializePurchases();
     }
 
-    if (!state.isInitialized) {
-      return null;
-    }
+    let purchasePackage = pkg;
 
-    const purchases = getPurchases();
-    if (!purchases || !hasPurchasesModule()) {
-      return null;
-    }
-
-    // If no package provided, fetch the current offering
-    let purchasePackage = packageToPurchase;
-    
     if (!purchasePackage) {
       const offering = await getOfferings();
-      if (!offering || !offering.availablePackages.length) {
+
+      if (!offering?.availablePackages?.length) {
         console.error('[PurchaseService] No packages available');
         return null;
       }
-      // Get the lifetime package (typically the first one)
+
       purchasePackage = offering.availablePackages[0];
     }
 
-    // Make the purchase
-    const { customerInfo } = await purchases.purchasePackage(purchasePackage);
-    
+    const { customerInfo } =
+      await Purchases.purchasePackage(purchasePackage);
+
     state.isOffline = false;
-    console.log('[PurchaseService] Purchase successful');
+
+    console.log('[PurchaseService] ✅ Purchase successful');
+
     return customerInfo;
   } catch (error: any) {
-    console.error('[PurchaseService] Purchase failed:', error);
-    
-    // Check if user cancelled
-    if (error.userCancelled) {
+    if (error?.userCancelled) {
       console.log('[PurchaseService] User cancelled purchase');
       return null;
     }
 
-    // Handle network errors gracefully
-    if (error.code === 'NETWORK_ERROR') {
-      state.isOffline = true;
-    }
+    console.error('[PurchaseService] Purchase failed:', error);
+    state.isOffline = true;
 
     return null;
   }
 };
 
 /**
- * Restore previous purchases
- * Returns CustomerInfo on success, null on failure
+ * Restore Purchases
  */
 export const restorePurchases = async (): Promise<CustomerInfo | null> => {
   try {
     if (!state.isInitialized) {
-      console.warn('[PurchaseService] Not initialized, attempting to initialize...');
       await initializePurchases();
     }
 
-    if (!state.isInitialized) {
-      return null;
-    }
+    const customerInfo = await Purchases.restorePurchases();
 
-    const purchases = getPurchases();
-    if (!purchases || !hasPurchasesModule()) {
-      return null;
-    }
-
-    const customerInfo = await purchases.restorePurchases();
-    
     state.isOffline = false;
-    console.log('[PurchaseService] Purchases restored successfully');
+
+    console.log('[PurchaseService] ✅ Restored');
+
     return customerInfo;
   } catch (error) {
     console.error('[PurchaseService] Restore failed:', error);
@@ -250,89 +156,65 @@ export const restorePurchases = async (): Promise<CustomerInfo | null> => {
 };
 
 /**
- * Check if user has premium access
- * Checks RevenueCat entitlements for active premium status
+ * Check Premium
+ *
+ * ⚠️ Make sure entitlement id matches RevenueCat dashboard.
  */
 export const isPremium = async (): Promise<boolean> => {
   try {
     if (!state.isInitialized) {
-      console.warn('[PurchaseService] Not initialized, attempting to initialize...');
       await initializePurchases();
     }
 
-    if (!state.isInitialized) {
-      return false;
-    }
+    const customerInfo = await Purchases.getCustomerInfo();
 
-    const purchases = getPurchases();
-    if (!purchases || !hasPurchasesModule()) {
-      return false;
-    }
-
-    const customerInfo = await purchases.getCustomerInfo();
-    
-    // Check if user has active entitlements
-    // Adjust 'premium' to match your entitlement identifier in RevenueCat
-    const hasActiveEntitlement =
-      typeof customerInfo.entitlements.active['premium'] !== 'undefined';
+    const hasPremium =
+      customerInfo.entitlements.active['premium'] !== undefined;
 
     state.isOffline = false;
-    return hasActiveEntitlement;
+
+    return hasPremium;
   } catch (error) {
-    console.error('[PurchaseService] Failed to check premium status:', error);
+    console.error('[PurchaseService] Premium check failed:', error);
     state.isOffline = true;
-    // Return false on error, but app should use local cached state
+
     return false;
   }
 };
 
 /**
- * Get current customer info
- * Returns null if offline or error occurs
+ * Get Customer Info
  */
 export const getCustomerInfo = async (): Promise<CustomerInfo | null> => {
   try {
     if (!state.isInitialized) {
-      console.warn('[PurchaseService] Not initialized, attempting to initialize...');
       await initializePurchases();
     }
 
-    if (!state.isInitialized) {
-      return null;
-    }
+    const info = await Purchases.getCustomerInfo();
 
-    const purchases = getPurchases();
-    if (!purchases || !hasPurchasesModule()) {
-      return null;
-    }
-
-    const customerInfo = await purchases.getCustomerInfo();
     state.isOffline = false;
-    return customerInfo;
+
+    return info;
   } catch (error) {
-    console.error('[PurchaseService] Failed to get customer info:', error);
+    console.error('[PurchaseService] Customer info failed:', error);
     state.isOffline = true;
     return null;
   }
 };
 
 /**
- * Check if service is currently offline
- */
-export const isOffline = (): boolean => {
-  return state.isOffline;
-};
-
-/**
- * Sync premium status with local state
- * Call this periodically to keep local state in sync
+ * Sync Premium
  */
 export const syncPremiumStatus = async (): Promise<boolean | null> => {
   try {
-    const premium = await isPremium();
-    return premium;
-  } catch (error) {
-    console.error('[PurchaseService] Sync failed:', error);
+    return await isPremium();
+  } catch {
     return null;
   }
 };
+
+/**
+ * Offline State
+ */
+export const isOffline = (): boolean => state.isOffline;

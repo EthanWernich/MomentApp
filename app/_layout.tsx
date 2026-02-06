@@ -6,103 +6,48 @@ import { themes } from '../lib/themes';
 import { View, ActivityIndicator } from 'react-native';
 import { initializePurchases, syncPremiumStatus } from '../services/purchaseService';
 import { ErrorBoundary } from '../components/ErrorBoundary';
-
-const patchFindNodeHandle = () => {
-  try {
-    const safeFindNodeHandle = (componentOrHandle: unknown): number | null => {
-      if (componentOrHandle == null) {
-        return null;
-      }
-      if (typeof componentOrHandle === 'number') {
-        return componentOrHandle;
-      }
-      if (typeof componentOrHandle === 'object') {
-        const maybeHandle =
-          (componentOrHandle as { _nativeTag?: number })._nativeTag ??
-          (componentOrHandle as { nativeTag?: number }).nativeTag;
-        if (typeof maybeHandle === 'number') {
-          return maybeHandle;
-        }
-        if ('current' in (componentOrHandle as object)) {
-          const current = (componentOrHandle as { current?: unknown }).current;
-          if (typeof current === 'number') {
-            return current;
-          }
-          if (current && typeof current === 'object') {
-            const currentHandle =
-              (current as { _nativeTag?: number })._nativeTag ??
-              (current as { nativeTag?: number }).nativeTag;
-            if (typeof currentHandle === 'number') {
-              return currentHandle;
-            }
-          }
-        }
-      }
-      return null;
-    };
-
-    const rendererProxy = require('react-native/Libraries/ReactNative/RendererProxy');
-    if (rendererProxy && typeof rendererProxy.findNodeHandle === 'function') {
-      rendererProxy.findNodeHandle = safeFindNodeHandle;
-    }
-
-    const reactNative = require('react-native');
-    Object.defineProperty(reactNative, 'findNodeHandle', {
-      get: () => safeFindNodeHandle,
-      configurable: true,
-    });
-  } catch (error) {
-    console.warn('[Startup] Failed to patch findNodeHandle:', error);
-  }
-};
-
-patchFindNodeHandle();
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 export default function RootLayout() {
   const [isReady, setIsReady] = useState(false);
-  const theme = useAppStore((state) => state.user?.theme) || 'midnight';
-  // Fallback to midnight theme if theme is invalid
-  const colors = themes[theme] || themes.midnight;
+  const theme = useAppStore((state: any) => state.user?.theme) || 'midnight';
+  const colors = themes[theme as keyof typeof themes] || themes.midnight;
 
-  // Global error handler for unhandled JS exceptions
+
+  // Global error handler
   useEffect(() => {
     type ErrorHandler = (error: unknown, isFatal: boolean) => void;
-    const errorUtils = (globalThis as { ErrorUtils?: { getGlobalHandler?: () => ErrorHandler | undefined; setGlobalHandler?: (handler: ErrorHandler) => void } }).ErrorUtils;
+    const errorUtils = (globalThis as {
+      ErrorUtils?: {
+        getGlobalHandler?: () => ErrorHandler | undefined;
+        setGlobalHandler?: (handler: ErrorHandler) => void;
+      };
+    }).ErrorUtils;
+
     const getGlobalHandler = errorUtils?.getGlobalHandler;
     const setGlobalHandler = errorUtils?.setGlobalHandler;
 
     if (!getGlobalHandler || !setGlobalHandler) {
-      console.warn('[Global Error Handler] ErrorUtils unavailable, skipping handler setup');
+      console.warn('[Global Error Handler] ErrorUtils unavailable');
       return;
     }
 
     const originalHandler = getGlobalHandler();
-    
+
     setGlobalHandler((error, isFatal) => {
       console.error('[Global Error Handler]', isFatal ? 'FATAL' : 'NON-FATAL', error);
-      
-      // For non-fatal errors, just log and continue
-      if (!isFatal) {
-        return;
-      }
-      
-      // For fatal errors in production, try to recover
+
+      if (!isFatal) return;
+
       if (!__DEV__) {
         try {
-          // Reset to default state and try to continue
           console.warn('[Global Error Handler] Attempting recovery...');
           setIsReady(true);
-        } catch (recoveryError) {
-          // If recovery fails, call original handler
-          if (originalHandler) {
-            originalHandler(error, isFatal);
-          }
+        } catch {
+          originalHandler?.(error, isFatal);
         }
       } else {
-        // In dev, use original handler (shows red screen)
-        if (originalHandler) {
-          originalHandler(error, isFatal);
-        }
+        originalHandler?.(error, isFatal);
       }
     });
 
@@ -116,12 +61,13 @@ export default function RootLayout() {
   useEffect(() => {
     const initializeApp = async () => {
       try {
-        // Load persisted state FIRST (critical for app to work)
+        // Load persisted state FIRST
         try {
           const state = await loadPersistedState();
+
           if (state && typeof state === 'object') {
-            // MERGE with existing defaults, don't replace
-            useAppStore.setState((currentState) => ({
+            useAppStore.setState((currentState: any) => ({
+
               ...currentState,
               ...state,
               user: {
@@ -132,49 +78,40 @@ export default function RootLayout() {
             }));
           }
         } catch (stateError) {
-          console.error('[App] Failed to load state, using defaults:', stateError);
-          // Continue with default state
+          console.error('[App] Failed to load state:', stateError);
         }
 
-        // Set ready immediately after state loads
         setIsReady(true);
 
-        // Initialize RevenueCat AFTER UI is ready (deferred, non-blocking)
-        // This prevents crashes from blocking the app startup
+        // Initialize purchases AFTER UI loads
         setTimeout(async () => {
           try {
             await initializePurchases();
-            
-            // Sync premium status with RevenueCat (optional)
+
             try {
               const premiumStatus = await syncPremiumStatus();
               if (premiumStatus !== null) {
                 useAppStore.getState().setPremium(premiumStatus);
               }
             } catch (syncError) {
-              console.error('[App] Failed to sync premium status:', syncError);
+              console.error('[App] Premium sync failed:', syncError);
             }
           } catch (rcError) {
-            console.error('[App] Failed to initialize purchases:', rcError);
-            // App continues with cached premium state - this is fine
+            console.error('[App] Purchases init failed:', rcError);
           }
-        }, 1000); // Delay RevenueCat init by 1 second
-        
+        }, 1000);
+
       } catch (error) {
         console.error('[App] Critical initialization error:', error);
-        // Even if everything fails, show the app
         setIsReady(true);
       }
     };
 
     initializeApp().catch((error) => {
-      // Ultimate safety net - catch any unhandled promise rejections
       console.error('[App] Unhandled initialization error:', error);
       setIsReady(true);
     });
 
-    // Sync premium status periodically (every 5 minutes)
-    // Only start interval sync if app is initialized successfully
     const syncInterval = setInterval(async () => {
       try {
         const premiumStatus = await syncPremiumStatus();
@@ -182,35 +119,41 @@ export default function RootLayout() {
           useAppStore.getState().setPremium(premiumStatus);
         }
       } catch (error) {
-        // Silently fail - don't crash the app during background sync
-        console.error('[App] Failed to sync premium status:', error);
+        console.error('[App] Background premium sync failed:', error);
       }
     }, 5 * 60 * 1000);
 
-    return () => {
-      if (syncInterval) {
-        clearInterval(syncInterval);
-      }
-    };
+    return () => clearInterval(syncInterval);
   }, []);
 
   if (!isReady) {
     return (
-      <View style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color={colors.accent} />
-      </View>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: colors.background,
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}
+        >
+          <ActivityIndicator size="large" color={colors.accent} />
+        </View>
+      </GestureHandlerRootView>
     );
   }
 
   return (
-    <ErrorBoundary>
-      <StatusBar style="light" />
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          contentStyle: { backgroundColor: colors.background },
-        }}
-      />
-    </ErrorBoundary>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ErrorBoundary>
+        <StatusBar style="light" />
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            contentStyle: { backgroundColor: colors.background },
+          }}
+        />
+      </ErrorBoundary>
+    </GestureHandlerRootView>
   );
 }
