@@ -14,7 +14,7 @@ import { Platform } from 'react-native';
 
 // RevenueCat API Keys
 const REVENUECAT_API_KEY = Platform.select({
-  ios: 'app5c5f1b59ee',
+  ios: 'appl_tRqCeTnLhYPSYVkTsokafYskJwS',
   android: 'YOUR_ANDROID_API_KEY_HERE', // Add your Android key when ready
 }) || '';
 

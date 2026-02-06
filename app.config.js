@@ -18,6 +18,7 @@ export default {
       bundleIdentifier: 'com.ethanwernich.moment',
       infoPlist: {
         UIBackgroundModes: ['remote-notification'],
+        ITSAppUsesNonExemptEncryption: false,
       },
     },
     android: {
