@@ -54,13 +54,13 @@ export const initializePurchases = async (): Promise<void> => {
       return;
     }
 
-    // Configure RevenueCat
+    // Configure RevenueCat - set log level BEFORE configure
     if (__DEV__) {
       Purchases.setLogLevel(LOG_LEVEL.DEBUG);
     }
 
-    // Initialize with anonymous user
-    await Purchases.configure({ apiKey: REVENUECAT_API_KEY });
+    // Initialize with anonymous user - configure is SYNCHRONOUS, don't await
+    Purchases.configure({ apiKey: REVENUECAT_API_KEY });
     
     state.isInitialized = true;
     state.isOffline = false;
