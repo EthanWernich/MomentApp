@@ -4,11 +4,10 @@
  * Graceful offline handling with local state sync
  */
 
-import Purchases, {
+import type {
   PurchasesOffering,
   PurchasesPackage,
   CustomerInfo,
-  LOG_LEVEL,
 } from 'react-native-purchases';
 import { NativeModules, Platform } from 'react-native';
 
@@ -36,8 +35,37 @@ const state: PurchaseServiceState = {
   isOffline: false,
 };
 
+type PurchasesModuleType = typeof import('react-native-purchases');
+let cachedPurchasesModule: PurchasesModuleType | null | undefined;
+
+const getPurchasesModule = (): PurchasesModuleType | null => {
+  if (cachedPurchasesModule !== undefined) {
+    return cachedPurchasesModule;
+  }
+
+  try {
+    cachedPurchasesModule = require('react-native-purchases') as PurchasesModuleType;
+    return cachedPurchasesModule;
+  } catch (error) {
+    console.warn('[PurchaseService] Purchases module unavailable:', error);
+    cachedPurchasesModule = null;
+    return null;
+  }
+};
+
+const getPurchases = (): PurchasesModuleType['default'] | null => {
+  const module = getPurchasesModule();
+  return module?.default ?? null;
+};
+
+const getLogLevel = (): PurchasesModuleType['LOG_LEVEL'] | undefined => {
+  const module = getPurchasesModule();
+  return module?.LOG_LEVEL;
+};
+
 const hasPurchasesModule = (): boolean => {
-  return Boolean(NativeModules?.RNPurchases || NativeModules?.Purchases);
+  const nativeModuleAvailable = Boolean(NativeModules?.RNPurchases || NativeModules?.Purchases);
+  return Boolean(nativeModuleAvailable && getPurchases());
 };
 
 /**
@@ -51,8 +79,11 @@ export const initializePurchases = async (): Promise<void> => {
   }
 
   try {
+    const purchases = getPurchases();
+    const logLevel = getLogLevel();
+
     // Ensure native module is available before calling into it
-    if (!hasPurchasesModule()) {
+    if (!purchases || !hasPurchasesModule()) {
       console.warn('[PurchaseService] Native module unavailable, skipping initialization');
       state.isOffline = true;
       state.isInitialized = false;
@@ -68,11 +99,13 @@ export const initializePurchases = async (): Promise<void> => {
 
     // Configure RevenueCat - set log level BEFORE configure
     if (__DEV__) {
-      Purchases.setLogLevel(LOG_LEVEL.DEBUG);
+      if (logLevel?.DEBUG) {
+        purchases.setLogLevel(logLevel.DEBUG);
+      }
     }
 
     // Initialize with anonymous user - configure is SYNCHRONOUS, don't await
-    Purchases.configure({ apiKey: REVENUECAT_API_KEY });
+    purchases.configure({ apiKey: REVENUECAT_API_KEY });
     
     state.isInitialized = true;
     state.isOffline = false;
@@ -101,7 +134,12 @@ export const getOfferings = async (): Promise<PurchasesOffering | null> => {
       return null;
     }
 
-    const offerings = await Purchases.getOfferings();
+    const purchases = getPurchases();
+    if (!purchases || !hasPurchasesModule()) {
+      return null;
+    }
+
+    const offerings = await purchases.getOfferings();
     
     // Get the lifetime offering
     const lifetimeOffering = offerings.current;
@@ -137,6 +175,11 @@ export const purchaseLifetime = async (
       return null;
     }
 
+    const purchases = getPurchases();
+    if (!purchases || !hasPurchasesModule()) {
+      return null;
+    }
+
     // If no package provided, fetch the current offering
     let purchasePackage = packageToPurchase;
     
@@ -151,7 +194,7 @@ export const purchaseLifetime = async (
     }
 
     // Make the purchase
-    const { customerInfo } = await Purchases.purchasePackage(purchasePackage);
+    const { customerInfo } = await purchases.purchasePackage(purchasePackage);
     
     state.isOffline = false;
     console.log('[PurchaseService] Purchase successful');
@@ -189,7 +232,12 @@ export const restorePurchases = async (): Promise<CustomerInfo | null> => {
       return null;
     }
 
-    const customerInfo = await Purchases.restorePurchases();
+    const purchases = getPurchases();
+    if (!purchases || !hasPurchasesModule()) {
+      return null;
+    }
+
+    const customerInfo = await purchases.restorePurchases();
     
     state.isOffline = false;
     console.log('[PurchaseService] Purchases restored successfully');
@@ -216,7 +264,12 @@ export const isPremium = async (): Promise<boolean> => {
       return false;
     }
 
-    const customerInfo = await Purchases.getCustomerInfo();
+    const purchases = getPurchases();
+    if (!purchases || !hasPurchasesModule()) {
+      return false;
+    }
+
+    const customerInfo = await purchases.getCustomerInfo();
     
     // Check if user has active entitlements
     // Adjust 'premium' to match your entitlement identifier in RevenueCat
@@ -248,7 +301,12 @@ export const getCustomerInfo = async (): Promise<CustomerInfo | null> => {
       return null;
     }
 
-    const customerInfo = await Purchases.getCustomerInfo();
+    const purchases = getPurchases();
+    if (!purchases || !hasPurchasesModule()) {
+      return null;
+    }
+
+    const customerInfo = await purchases.getCustomerInfo();
     state.isOffline = false;
     return customerInfo;
   } catch (error) {
