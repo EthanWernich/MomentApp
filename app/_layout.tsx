@@ -7,6 +7,57 @@ import { View, ActivityIndicator } from 'react-native';
 import { initializePurchases, syncPremiumStatus } from '../services/purchaseService';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 
+const patchFindNodeHandle = () => {
+  try {
+    const safeFindNodeHandle = (componentOrHandle: unknown): number | null => {
+      if (componentOrHandle == null) {
+        return null;
+      }
+      if (typeof componentOrHandle === 'number') {
+        return componentOrHandle;
+      }
+      if (typeof componentOrHandle === 'object') {
+        const maybeHandle =
+          (componentOrHandle as { _nativeTag?: number })._nativeTag ??
+          (componentOrHandle as { nativeTag?: number }).nativeTag;
+        if (typeof maybeHandle === 'number') {
+          return maybeHandle;
+        }
+        if ('current' in (componentOrHandle as object)) {
+          const current = (componentOrHandle as { current?: unknown }).current;
+          if (typeof current === 'number') {
+            return current;
+          }
+          if (current && typeof current === 'object') {
+            const currentHandle =
+              (current as { _nativeTag?: number })._nativeTag ??
+              (current as { nativeTag?: number }).nativeTag;
+            if (typeof currentHandle === 'number') {
+              return currentHandle;
+            }
+          }
+        }
+      }
+      return null;
+    };
+
+    const rendererProxy = require('react-native/Libraries/ReactNative/RendererProxy');
+    if (rendererProxy && typeof rendererProxy.findNodeHandle === 'function') {
+      rendererProxy.findNodeHandle = safeFindNodeHandle;
+    }
+
+    const reactNative = require('react-native');
+    Object.defineProperty(reactNative, 'findNodeHandle', {
+      get: () => safeFindNodeHandle,
+      configurable: true,
+    });
+  } catch (error) {
+    console.warn('[Startup] Failed to patch findNodeHandle:', error);
+  }
+};
+
+patchFindNodeHandle();
+
 export default function RootLayout() {
   const [isReady, setIsReady] = useState(false);
   const theme = useAppStore((state) => state.user?.theme) || 'midnight';

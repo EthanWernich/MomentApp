@@ -20,6 +20,11 @@ config.resolver.extraNodeModules = {
     'shims',
     'ReactFabricShim.js'
   ),
+  'react-native/Libraries/ReactNative/RendererProxy': path.join(
+    __dirname,
+    'shims',
+    'RendererProxy.js'
+  ),
 };
 
 module.exports = config;
