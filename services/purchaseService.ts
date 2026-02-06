@@ -10,7 +10,7 @@ import Purchases, {
   CustomerInfo,
   LOG_LEVEL,
 } from 'react-native-purchases';
-import { Platform } from 'react-native';
+import { NativeModules, Platform } from 'react-native';
 
 // RevenueCat API Keys
 const REVENUECAT_API_KEY = Platform.select({
@@ -36,6 +36,10 @@ const state: PurchaseServiceState = {
   isOffline: false,
 };
 
+const hasPurchasesModule = (): boolean => {
+  return Boolean(NativeModules?.RNPurchases || NativeModules?.Purchases);
+};
+
 /**
  * Initialize RevenueCat SDK
  * Call this once at app startup
@@ -47,6 +51,14 @@ export const initializePurchases = async (): Promise<void> => {
   }
 
   try {
+    // Ensure native module is available before calling into it
+    if (!hasPurchasesModule()) {
+      console.warn('[PurchaseService] Native module unavailable, skipping initialization');
+      state.isOffline = true;
+      state.isInitialized = false;
+      return;
+    }
+
     // Validate API key before attempting to initialize
     if (!hasValidApiKey()) {
       console.warn('[PurchaseService] Invalid or missing API key, skipping initialization');
@@ -85,6 +97,10 @@ export const getOfferings = async (): Promise<PurchasesOffering | null> => {
       await initializePurchases();
     }
 
+    if (!state.isInitialized) {
+      return null;
+    }
+
     const offerings = await Purchases.getOfferings();
     
     // Get the lifetime offering
@@ -115,6 +131,10 @@ export const purchaseLifetime = async (
     if (!state.isInitialized) {
       console.warn('[PurchaseService] Not initialized, attempting to initialize...');
       await initializePurchases();
+    }
+
+    if (!state.isInitialized) {
+      return null;
     }
 
     // If no package provided, fetch the current offering
@@ -165,6 +185,10 @@ export const restorePurchases = async (): Promise<CustomerInfo | null> => {
       await initializePurchases();
     }
 
+    if (!state.isInitialized) {
+      return null;
+    }
+
     const customerInfo = await Purchases.restorePurchases();
     
     state.isOffline = false;
@@ -186,6 +210,10 @@ export const isPremium = async (): Promise<boolean> => {
     if (!state.isInitialized) {
       console.warn('[PurchaseService] Not initialized, attempting to initialize...');
       await initializePurchases();
+    }
+
+    if (!state.isInitialized) {
+      return false;
     }
 
     const customerInfo = await Purchases.getCustomerInfo();
@@ -214,6 +242,10 @@ export const getCustomerInfo = async (): Promise<CustomerInfo | null> => {
     if (!state.isInitialized) {
       console.warn('[PurchaseService] Not initialized, attempting to initialize...');
       await initializePurchases();
+    }
+
+    if (!state.isInitialized) {
+      return null;
     }
 
     const customerInfo = await Purchases.getCustomerInfo();

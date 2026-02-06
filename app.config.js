@@ -3,6 +3,7 @@ export default {
     name: 'Moment',
     slug: 'moment-life-countdown',
     version: '1.0.0',
+    newArchEnabled: false,
     orientation: 'portrait',
     icon: './assets/icon.png',
     userInterfaceStyle: 'dark',
