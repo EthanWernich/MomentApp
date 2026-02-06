@@ -57,9 +57,9 @@ const getIconComponent = (name?: string) => {
 };
 
 export const YearGrid: React.FC = () => {
-  const theme = useAppStore((state) => state.user.theme);
-  const events = useAppStore((state) => state.events);
-  const colors = themes[theme];
+  const theme = useAppStore((state) => state.user?.theme || 'midnight');
+  const events = useAppStore((state) => state.events || []);
+  const colors = themes[theme] || themes.midnight;
   
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [showTooltip, setShowTooltip] = useState(false);

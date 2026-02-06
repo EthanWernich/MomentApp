@@ -36,11 +36,11 @@ export default function OnboardingScreen() {
   const scrollViewRef = useRef<ScrollView>(null);
   const hasCompletedOnboarding = useAppStore((state) => state.hasCompletedOnboarding);
   const completeOnboarding = useAppStore((state) => state.completeOnboarding);
-  const isPremium = useAppStore((state) => state.user.isPremium);
-  const birthdate = useAppStore((state) => state.user.birthdate);
+  const isPremium = useAppStore((state) => state.user?.isPremium || false);
+  const birthdate = useAppStore((state) => state.user?.birthdate);
   const setBirthdate = useAppStore((state) => state.setBirthdate);
-  const theme = useAppStore((state) => state.user.theme);
-  const colors = themes[theme];
+  const theme = useAppStore((state) => state.user?.theme || 'midnight');
+  const colors = themes[theme] || themes.midnight;
 
   const [currentPage, setCurrentPage] = useState(0);
   const [showPaywall, setShowPaywall] = useState(false);

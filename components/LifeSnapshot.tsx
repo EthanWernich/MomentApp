@@ -15,9 +15,9 @@ interface LifeSnapshotProps {
 }
 
 export const LifeSnapshot: React.FC<LifeSnapshotProps> = ({ birthdate, onTriggerPaywall }) => {
-  const theme = useAppStore((state) => state.user.theme);
-  const isPremium = useAppStore((state) => state.user.isPremium);
-  const colors = themes[theme];
+  const theme = useAppStore((state) => state.user?.theme || 'midnight');
+  const isPremium = useAppStore((state) => state.user?.isPremium || false);
+  const colors = themes[theme] || themes.midnight;
   const viewRef = useRef<View>(null);
 
   const stats = React.useMemo(() => {

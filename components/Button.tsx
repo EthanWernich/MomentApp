@@ -20,8 +20,8 @@ export const Button: React.FC<ButtonProps> = ({
   disabled = false,
   loading = false,
 }) => {
-  const theme = useAppStore((state) => state.user.theme);
-  const colors = themes[theme];
+  const theme = useAppStore((state) => state.user?.theme || 'midnight');
+  const colors = themes[theme] || themes.midnight;
 
   const getBackgroundColor = () => {
     if (variant === 'primary') return colors.accent;

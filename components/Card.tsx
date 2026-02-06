@@ -10,8 +10,8 @@ interface CardProps {
 }
 
 export const Card: React.FC<CardProps> = ({ children, style }) => {
-  const theme = useAppStore((state) => state.user.theme);
-  const colors = themes[theme];
+  const theme = useAppStore((state) => state.user?.theme || 'midnight');
+  const colors = themes[theme] || themes.midnight;
 
   return (
     <View style={[styles.card, { backgroundColor: colors.card }, style]}>

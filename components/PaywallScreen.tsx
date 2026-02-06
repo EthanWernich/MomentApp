@@ -40,9 +40,9 @@ const FEATURES = [
 ];
 
 export function PaywallScreen({ onDismiss, onPurchaseSuccess }: PaywallScreenProps) {
-  const theme = useAppStore((state) => state.user.theme);
+  const theme = useAppStore((state) => state.user?.theme || 'midnight');
   const setPremium = useAppStore((state) => state.setPremium);
-  const colors = themes[theme];
+  const colors = themes[theme] || themes.midnight;
   
   const [loading, setLoading] = useState(false);
   const [restoring, setRestoring] = useState(false);

@@ -59,8 +59,8 @@ interface EventCardProps {
 }
 
 export const EventCard: React.FC<EventCardProps> = ({ event, onDelete }) => {
-  const theme = useAppStore((state) => state.user.theme);
-  const colors = themes[theme];
+  const theme = useAppStore((state) => state.user?.theme || 'midnight');
+  const colors = themes[theme] || themes.midnight;
 
   const daysRemaining = getDaysUntil(event.eventDate);
   const progress = calculateEventProgress(event.createdAt, event.eventDate);

@@ -68,12 +68,12 @@ const getIconComponent = (name: string) => {
 };
 
 export default function EventsScreen() {
-  const theme = useAppStore((state) => state.user.theme);
-  const events = useAppStore((state) => state.events);
+  const theme = useAppStore((state) => state.user?.theme || 'midnight');
+  const events = useAppStore((state) => state.events || []);
   const addEvent = useAppStore((state) => state.addEvent);
   const deleteEvent = useAppStore((state) => state.deleteEvent);
-  const isPremium = useAppStore((state) => state.user.isPremium);
-  const colors = themes[theme];
+  const isPremium = useAppStore((state) => state.user?.isPremium || false);
+  const colors = themes[theme] || themes.midnight;
 
   const [showModal, setShowModal] = useState(false);
   const [showIconSearch, setShowIconSearch] = useState(false);

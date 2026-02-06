@@ -34,13 +34,13 @@ const THEMES: { id: Theme; name: string; description: string; isPremium?: boolea
 ];
 
 export default function SettingsScreen() {
-  const theme = useAppStore((state) => state.user.theme);
-  const birthdate = useAppStore((state) => state.user.birthdate);
-  const isPremium = useAppStore((state) => state.user.isPremium);
+  const theme = useAppStore((state) => state.user?.theme || 'midnight');
+  const birthdate = useAppStore((state) => state.user?.birthdate);
+  const isPremium = useAppStore((state) => state.user?.isPremium || false);
   const setTheme = useAppStore((state) => state.setTheme);
   const setBirthdate = useAppStore((state) => state.setBirthdate);
   const resetData = useAppStore((state) => state.resetData);
-  const colors = themes[theme];
+  const colors = themes[theme] || themes.midnight;
 
   const [showBirthdateModal, setShowBirthdateModal] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);

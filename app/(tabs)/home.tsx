@@ -8,8 +8,8 @@ import { getCurrentYear, getDaysInYear, getDaysPassedInYear, getDaysRemainingInY
 import { STANDARD_PADDING } from '../../constants/appConfig';
 
 export default function HomeScreen() {
-  const theme = useAppStore((state) => state.user.theme);
-  const colors = themes[theme];
+  const theme = useAppStore((state) => state.user?.theme || 'midnight');
+  const colors = themes[theme] || themes.midnight;
 
   const stats = useMemo(() => {
     const year = getCurrentYear();

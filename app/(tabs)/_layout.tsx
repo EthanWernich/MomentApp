@@ -6,8 +6,8 @@ import { useAppStore } from '../../store/useAppStore';
 import { themes } from '../../lib/themes';
 
 export default function TabsLayout() {
-  const theme = useAppStore((state) => state.user.theme);
-  const colors = themes[theme];
+  const theme = useAppStore((state) => state.user?.theme || 'midnight');
+  const colors = themes[theme] || themes.midnight;
 
   return (
     <Tabs

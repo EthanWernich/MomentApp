@@ -3,15 +3,55 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useAppStore, loadPersistedState } from '../store/useAppStore';
 import { themes } from '../lib/themes';
-import { View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator, Platform } from 'react-native';
 import { initializePurchases, syncPremiumStatus } from '../services/purchaseService';
 import { ErrorBoundary } from '../components/ErrorBoundary';
+import { ErrorUtils } from 'react-native';
 
 export default function RootLayout() {
   const [isReady, setIsReady] = useState(false);
-  const theme = useAppStore((state) => state.user.theme);
+  const theme = useAppStore((state) => state.user?.theme) || 'midnight';
   // Fallback to midnight theme if theme is invalid
   const colors = themes[theme] || themes.midnight;
+
+  // Global error handler for unhandled JS exceptions
+  useEffect(() => {
+    const originalHandler = ErrorUtils.getGlobalHandler();
+    
+    ErrorUtils.setGlobalHandler((error, isFatal) => {
+      console.error('[Global Error Handler]', isFatal ? 'FATAL' : 'NON-FATAL', error);
+      
+      // For non-fatal errors, just log and continue
+      if (!isFatal) {
+        return;
+      }
+      
+      // For fatal errors in production, try to recover
+      if (!__DEV__) {
+        try {
+          // Reset to default state and try to continue
+          console.warn('[Global Error Handler] Attempting recovery...');
+          setIsReady(true);
+        } catch (recoveryError) {
+          // If recovery fails, call original handler
+          if (originalHandler) {
+            originalHandler(error, isFatal);
+          }
+        }
+      } else {
+        // In dev, use original handler (shows red screen)
+        if (originalHandler) {
+          originalHandler(error, isFatal);
+        }
+      }
+    });
+
+    return () => {
+      if (originalHandler) {
+        ErrorUtils.setGlobalHandler(originalHandler);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const initializeApp = async () => {
@@ -20,8 +60,16 @@ export default function RootLayout() {
         try {
           const state = await loadPersistedState();
           if (state && typeof state === 'object') {
-            // Validate state before setting
-            useAppStore.setState(state);
+            // MERGE with existing defaults, don't replace
+            useAppStore.setState((currentState) => ({
+              ...currentState,
+              ...state,
+              user: {
+                ...currentState.user,
+                ...(state.user || {}),
+              },
+              events: state.events || currentState.events,
+            }));
           }
         } catch (stateError) {
           console.error('[App] Failed to load state, using defaults:', stateError);

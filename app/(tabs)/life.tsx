@@ -14,10 +14,10 @@ import { getWeeksLived, getWeeksRemaining, getLifePercentage, getTotalWeeksInLif
 import { DEFAULT_LIFE_EXPECTANCY_YEARS, DEFAULT_BIRTHDATE_YEAR, DEFAULT_BIRTHDATE_MONTH, DEFAULT_BIRTHDATE_DAY, STANDARD_PADDING } from '../../constants/appConfig';
 
 export default function LifeScreen() {
-  const theme = useAppStore((state) => state.user.theme);
-  const birthdate = useAppStore((state) => state.user.birthdate);
+  const theme = useAppStore((state) => state.user?.theme || 'midnight');
+  const birthdate = useAppStore((state) => state.user?.birthdate);
   const setBirthdate = useAppStore((state) => state.setBirthdate);
-  const colors = themes[theme];
+  const colors = themes[theme] || themes.midnight;
 
   const [showModal, setShowModal] = useState(false);
   const [showGrid, setShowGrid] = useState(false);

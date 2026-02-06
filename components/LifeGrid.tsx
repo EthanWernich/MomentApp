@@ -20,8 +20,8 @@ interface LifeGridProps {
 }
 
 export const LifeGrid: React.FC<LifeGridProps> = ({ birthdate }) => {
-  const theme = useAppStore((state) => state.user.theme);
-  const colors = themes[theme];
+  const theme = useAppStore((state) => state.user?.theme || 'midnight');
+  const colors = themes[theme] || themes.midnight;
 
   const { totalMonths, monthsLived } = useMemo(() => {
     if (!birthdate) {
