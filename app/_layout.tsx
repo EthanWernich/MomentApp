@@ -3,10 +3,9 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useAppStore, loadPersistedState } from '../store/useAppStore';
 import { themes } from '../lib/themes';
-import { View, ActivityIndicator, Platform } from 'react-native';
+import { View, ActivityIndicator } from 'react-native';
 import { initializePurchases, syncPremiumStatus } from '../services/purchaseService';
 import { ErrorBoundary } from '../components/ErrorBoundary';
-import { ErrorUtils } from 'react-native';
 
 export default function RootLayout() {
   const [isReady, setIsReady] = useState(false);
@@ -16,9 +15,19 @@ export default function RootLayout() {
 
   // Global error handler for unhandled JS exceptions
   useEffect(() => {
-    const originalHandler = ErrorUtils.getGlobalHandler();
+    type ErrorHandler = (error: unknown, isFatal: boolean) => void;
+    const errorUtils = (globalThis as { ErrorUtils?: { getGlobalHandler?: () => ErrorHandler | undefined; setGlobalHandler?: (handler: ErrorHandler) => void } }).ErrorUtils;
+    const getGlobalHandler = errorUtils?.getGlobalHandler;
+    const setGlobalHandler = errorUtils?.setGlobalHandler;
+
+    if (!getGlobalHandler || !setGlobalHandler) {
+      console.warn('[Global Error Handler] ErrorUtils unavailable, skipping handler setup');
+      return;
+    }
+
+    const originalHandler = getGlobalHandler();
     
-    ErrorUtils.setGlobalHandler((error, isFatal) => {
+    setGlobalHandler((error, isFatal) => {
       console.error('[Global Error Handler]', isFatal ? 'FATAL' : 'NON-FATAL', error);
       
       // For non-fatal errors, just log and continue
@@ -48,7 +57,7 @@ export default function RootLayout() {
 
     return () => {
       if (originalHandler) {
-        ErrorUtils.setGlobalHandler(originalHandler);
+        setGlobalHandler(originalHandler);
       }
     };
   }, []);
