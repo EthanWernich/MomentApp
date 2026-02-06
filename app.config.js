@@ -33,9 +33,7 @@ export default {
       favicon: './assets/favicon.png',
       bundler: 'metro',
     },
-    plugins: ['expo-router',
-      "react-native-purchases"
-    ],
+    plugins: ['expo-router', 'react-native-purchases'],
     experiments: {
       typedRoutes: true,
     },
